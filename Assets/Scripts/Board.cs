@@ -15,11 +15,6 @@ public class Player
         position_ = x;
         go_ = go;
     }
-
-    public void UpdatePosition(Vector2 newPos)
-    {
-        go_.transform.position = new Vector3(newPos.x, newPos.y, -8.0f); // Hard-set Z value 
-    }
 }
 
 public class Board : MonoBehaviour
@@ -27,16 +22,16 @@ public class Board : MonoBehaviour
     public void Start()
     {   
         // Instantiate first object
-        var obj = Instantiate(coinPrefab_, new Vector3(2.5f, 2.5f, -1.0f), Quaternion.Euler(90,0,0));        
+        var obj = Instantiate(coinPrefab_, new Vector3(-2.5f, 2.5f, -1.0f), Quaternion.Euler(90,0,0));        
         var renderer = obj.GetComponent<MeshRenderer>();
         renderer.material.SetColor("_Color", Color.red);
-        players_.Add(new Player(1, obj));
+        players_.Add(new Player(0, obj));
 
         //Instantiate second object
-        obj = Instantiate(coinPrefab_, new Vector3(7.5f, 7.5f, -1.0f), Quaternion.Euler(90,0,0));  
+        obj = Instantiate(coinPrefab_, new Vector3(-7.5f, 7.5f, -1.0f), Quaternion.Euler(90,0,0));  
         renderer = obj.GetComponent<MeshRenderer>();      
         renderer.material.SetColor("_Color", Color.blue);
-        players_.Add(new Player(1, obj));
+        players_.Add(new Player(0, obj));
         Debug.Log("Dice Count: \t" + obj.transform.position);
 
         scoreBoard.text = "Let the game begin!";
@@ -44,24 +39,30 @@ public class Board : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetMouseButtonDown(0) & !isGameDone_)
+        // If game is not done
+        if (!isGameDone_)
         {
-           // Get a random number on dice
-           diceVal_ = rnd.Next(1,6);
-           Debug.Log("Dice Roll: \t" + diceVal_);
+            if (Input.GetMouseButtonDown(0))
+            {
+            // Get a random number on dice
+            diceVal_ = rnd.Next(1,6);
+            Debug.Log("Dice Roll: \t" + diceVal_);
 
-            /// TODO : Improve animation to roll dice            
-           StartCoroutine(RollDice(diceVal_));
+            // Animation to roll dice            
+            StartCoroutine(RollDice(diceVal_));
+            }
+
+            if (isDiceRolled_)
+            {
+                // Update players
+                StartCoroutine(UpdatePlayers(diceVal_));
+                isDiceRolled_ = false;
+
+                // Update Score Board
+                Invoke("UpdateScoreBoard", 1);
+            }
         }
-
-        if (isDiceRolled_ & !isGameDone_)
-        {
-            // Update players
-            UpdatePlayers(diceVal_);
-            isDiceRolled_ = false;
-        }
-
-        if (isGameDone_)
+        else
         {
             Debug.Log("Game Over!");
             scoreBoard.text = "Player " + (playerTurn_ + 1)+ " Wins !!!";
@@ -70,7 +71,7 @@ public class Board : MonoBehaviour
         }
     }
 
-    void UpdatePlayers(int diceVal)
+    public IEnumerator UpdatePlayers(int diceVal)
     {        
         // Update player turn
         playerTurn_ = ((playerTurn_ + 1) % 2);
@@ -91,27 +92,36 @@ public class Board : MonoBehaviour
         if (100 <= toCell)
         {
             isGameDone_ = true;
-            return;
+            yield return null;
         }
 
         // Update cell
         players_[playerTurn_].position_ = toCell;
          
         // Get the new position
-        var newPos = Cell2Pos(toCell);
-        players_[playerTurn_].UpdatePosition(newPos);
+        var newPos = Cell2Pos(toCell);        
         Debug.Log("New Pos \t" + newPos); 
+        
+        // Move object
+        var step = 1 * Time.deltaTime;
+        players_[playerTurn_].go_.transform.position = 
+                                new Vector3(newPos.x, newPos.y, -8.0f);
+                 //Vector3.MoveTowards(players_[playerTurn_].go_.transform.position,
+                 //                   new Vector3(newPos.x, newPos.y, -8.0f), step);
 
-        // Update Score Board
-        UpdateScoreBoard();        
+        yield return null;
     }
 
     public Vector2 Cell2Pos(int cell)
     {        
         // Get the X and Y values
         Vector2 pos = new Vector2();    
-        pos.y = ( ((cell -1) / 10.0f) * multiplier_) - 5.0f;
-        pos.x = (float)Math.Floor(( ((cell-1) % 10.0f) * multiplier_)) - 5.0f;
+        
+        // Constant 10 as board is 10 x 10
+        pos.x = (float)Math.Ceiling(( ((cell-1) % 10.0f) * multiplier_)) + 5.0f;
+        pos.y = ( (cell / 10) * multiplier_) + 5.0f;
+
+        Debug.Log(pos);
 
         return pos;
     }
@@ -139,11 +149,15 @@ public class Board : MonoBehaviour
         // Set times
         var rollTime_ = 0.0f;
         var totalTime = UnityEngine.Random.Range(2.0f, 5.0f);
-        
+        var speed =  UnityEngine.Random.Range(15, 75);
+
         while (rollTime_ < totalTime)
         {
-            // Rotate objects
-            dice_.transform.Rotate(Vector3.one * 200 * Time.deltaTime, Space.Self);
+            // Rotate objects            
+            var toRot = Quaternion.Euler(new Vector3(UnityEngine.Random.Range(-180.0f, 180.0f),
+                                        UnityEngine.Random.Range(-180.0f, 180.0f), UnityEngine.Random.Range(-180.0f, 180.0f)));
+            dice_.transform.rotation = Quaternion.Slerp(dice_.transform.rotation,
+                                         toRot, Time.deltaTime * speed);
             
             // update time
             rollTime_ += Time.deltaTime;  
@@ -200,7 +214,7 @@ public class Board : MonoBehaviour
     private bool isDiceRolled_ = false;
 
     // Multiplier for board size
-    private float multiplier_ = 10.0f; // Multiples of 10 for board size
+    private float multiplier_ = 10.0f; // Multiples for 10 x scaling of board
 
     private static System.Random rnd = new System.Random();  
 }
